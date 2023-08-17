@@ -1,0 +1,108 @@
+from abc import ABC, abstractmethod
+import docker
+from datetime import datetime
+from tempfile import mkdtemp
+from os.path import join, getsize, isfile
+from os import listdir
+import shutil
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from utils import format_size, format_time
+from time import time
+
+
+class Downloader(ABC):
+    CONTAINER_PACKAGE_DIR = "/mnt/tmp"
+
+    def __init__(self, package: str, output_dir: str):
+        self.package = package
+        self.output_dir = output_dir
+        self.console = Console()
+        self.tmp_dir = mkdtemp()
+
+    def run(self, show_logs: bool = False):
+        start_time = time()
+
+        try:
+            client = docker.from_env()
+        except Exception as e:
+            print("Error: {}".format(e))
+            print("Make sure you have docker installed and running.")
+            exit(1)
+
+        self.console.print(f"Temporary directory: {self.tmp_dir}")
+
+        self.console.print(
+            f"Creating container from image: {self.get_image()}")
+        container = client.containers.run(
+            self.get_image(),
+            self.get_command(),
+            detach=True,
+            volumes=[rf"{self.tmp_dir}:{self.CONTAINER_PACKAGE_DIR}"],
+        )
+
+        self.console.print(f"Container ID: {container.id}")
+
+        if show_logs:
+            self.console.print("---------------------------------------")
+            for log in container.logs(stream=True, stdout=True, stderr=True):
+                self.console.print(log.decode("utf-8").strip())
+            self.console.print("---------------------------------------")
+
+        if not show_logs:
+            with self.console.status("Waiting for container to finish..."):
+                container.wait()
+            self.console.print("Done!")
+        else:
+            container.wait()
+
+        container.remove()
+
+        self.__print_downloaded_files()
+
+        now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        output_file = join(
+            self.output_dir, f"{self.get_os()}-{self.package}-{now_str}")
+        output_file_with_ext = f"{output_file}.zip"
+
+        shutil.make_archive(
+            output_file,
+            "zip",
+            self.tmp_dir
+        )
+
+        end_time = time()
+        panel = Panel(
+            f"* Archive saved as [bold]{output_file_with_ext}[/bold]\n* Total Size: {format_size(getsize(output_file_with_ext))}\n* Elapsed time: {format_time(end_time - start_time)}",
+            title="Summary"
+        )
+        self.console.print(panel)
+
+        shutil.rmtree(self.tmp_dir)
+
+    def __print_downloaded_files(self):
+        table = Table(title="Files downloaded")
+        table.add_column("File")
+        table.add_column("Size")
+
+        list_of_files = filter(lambda x: isfile(join(self.tmp_dir, x)),
+                               listdir(self.tmp_dir))
+        files_with_size = [(file_name, getsize(join(self.tmp_dir, file_name)))
+                           for file_name in list_of_files]
+        files_with_size.sort(key=lambda x: x[1], reverse=True)
+        for file, size in files_with_size:
+            table.add_row(file, format_size(size))
+        self.console.print(table)
+
+    @abstractmethod
+    def get_os(self):
+        pass
+
+    @abstractmethod
+    def get_command(self):
+        pass
+
+    @abstractmethod
+    def get_image(self):
+        pass
