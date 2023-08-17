@@ -17,6 +17,6 @@ For example: TensorFlow version x.x.x for Ubuntu 20.04 AND Python 3.8
 ## Requirements
 The problem is that you can't download rpm files with yum if you are on ubuntu. Right? Wrong. This is possible thanks to docker containers.
 You can build any environment imaginable with containers, and thats what this package does.
-If you want to download vim for ubuntu, no matter what os you are running, the package will run a container of ubuntu, download the .deb files and zip it the one single file.
+If you want to download vim for ubuntu, no matter what os you are running, the package will run a container of ubuntu, download the .deb files and zip it to one single file.
 
 **To use this package you will need to run docker on your system: [Install Docker](https://docs.docker.com/get-docker/)**
