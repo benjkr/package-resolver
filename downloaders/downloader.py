@@ -22,7 +22,7 @@ class Downloader(ABC):
         self.tmp_dir = mkdtemp()
 
     def run(self, show_logs: bool = False):
-        start_time = time()
+        self.start_time = time()
 
         try:
             client = docker.from_env()
@@ -35,32 +35,37 @@ class Downloader(ABC):
 
         self.console.print(
             f"Creating container from image: {self.get_image()}")
-        container = client.containers.run(
+
+        command = self.get_command()
+        self.console.print(f"Running command: {command}")
+        self.container = client.containers.run(
             self.get_image(),
             self.get_command(),
             detach=True,
             volumes=[rf"{self.tmp_dir}:{self.CONTAINER_PACKAGE_DIR}"],
         )
 
-        self.console.print(f"Container ID: {container.id}")
+        self.console.print(f"Container ID: {self.container.id}")
 
         if show_logs:
             self.console.print("---------------------------------------")
-            for log in container.logs(stream=True, stdout=True, stderr=True):
+            for log in self.container.logs(stream=True, stdout=True, stderr=True):
                 self.console.print(log.decode("utf-8").strip())
             self.console.print("---------------------------------------")
-
-        if not show_logs:
-            with self.console.status("Waiting for container to finish..."):
-                container.wait()
-            self.console.print("Done!")
+            self.container.wait()
         else:
-            container.wait()
+            with self.console.status("Waiting for container to finish..."):
+                self.container.wait()
+            self.console.print("Done!")
 
-        container.remove()
-
+        self.__handle_status_code()
+        self.container.remove()
         self.__print_downloaded_files()
+        self.__pack_downloaded_files_and_print_summary()
 
+        shutil.rmtree(self.tmp_dir)
+
+    def __pack_downloaded_files_and_print_summary(self):
         now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         output_file = join(
             self.output_dir, f"{self.get_os()}-{self.package}-{now_str}")
@@ -72,14 +77,30 @@ class Downloader(ABC):
             self.tmp_dir
         )
 
-        end_time = time()
+        self.end_time = time()
         panel = Panel(
-            f"* Archive saved as [bold]{output_file_with_ext}[/bold]\n* Total Size: {format_size(getsize(output_file_with_ext))}\n* Elapsed time: {format_time(end_time - start_time)}",
+            f"* Archive saved as [bold]{output_file_with_ext}[/bold]\n* Total Size: {format_size(getsize(output_file_with_ext))}\n* Elapsed time: {format_time(self.end_time - self.start_time)}",
             title="Summary"
         )
         self.console.print(panel)
 
-        shutil.rmtree(self.tmp_dir)
+    def __handle_status_code(self):
+        self.container.reload()
+        status_code = self.container.attrs["State"]["ExitCode"]
+
+        if status_code != 0:
+            panel = Panel(
+                f"{self.container.logs(stdout=False).decode('utf-8')}",
+                title="Error logs",
+                border_style="red",
+                style="red"
+            )
+            self.console.print(panel)
+            self.console.print(
+                f"Error: Container exited with code {status_code}")
+
+            self.container.remove()
+            exit(1)
 
     def __print_downloaded_files(self):
         table = Table(title="Files downloaded")
