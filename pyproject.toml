@@ -10,6 +10,10 @@ packages = [{ include = "all_package_resolver" }]
 [tool.poetry.scripts]
 download-package = "all_package_resolver.main:app"
 
+[tool.poetry.urls]
+homepage = "https://pypi.org/project/all-package-resolver/"
+repository = "https://github.com/benjkr/package-resolver"
+
 [tool.poetry.dependencies]
 python = "^3.10"
 docker = "^6.1.3"
