@@ -1,4 +1,4 @@
-from downloaders.downloader import Downloader
+from all_package_resolver.downloaders.downloader import Downloader
 
 
 class AlpineDownloader(Downloader):

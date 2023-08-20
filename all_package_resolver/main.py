@@ -2,7 +2,7 @@ import os
 import typer
 from typing_extensions import Annotated
 from enum import Enum
-from downloaders.downloader import Downloader
+from .downloaders.downloader import Downloader
 
 app = typer.Typer(
     help="Package downloader for different OS and Programming Languages")
@@ -36,15 +36,15 @@ def os_download(
 
     match os_type:
         case OS.ubuntu:
-            from downloaders.ubuntu_downloader import UbuntuDownloader
+            from .downloaders.ubuntu_downloader import UbuntuDownloader
             downloader = UbuntuDownloader(package, state["output_dir"])
 
         case OS.centos:
-            from downloaders.centos_downloader import CentosDownloader
+            from .downloaders.centos_downloader import CentosDownloader
             downloader = CentosDownloader(package, state["output_dir"])
 
         case OS.alpine:
-            from downloaders.alpine_downloader import AlpineDownloader
+            from .downloaders.alpine_downloader import AlpineDownloader
             downloader = AlpineDownloader(package, state["output_dir"])
 
         case _:
@@ -64,7 +64,7 @@ def language_download(
 
     match lang_type:
         case Lang.python:
-            from downloaders.python_downloader import PythonDownloader
+            from .downloaders.python_downloader import PythonDownloader
             downloader = PythonDownloader(
                 package,
                 state["output_dir"],
@@ -72,7 +72,7 @@ def language_download(
             )
 
         case Lang.node:
-            from downloaders.node_downloader import NodeDownloader
+            from .downloaders.node_downloader import NodeDownloader
             downloader = NodeDownloader(
                 package,
                 state["output_dir"],

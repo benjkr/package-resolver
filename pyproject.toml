@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "all-package-resolver"
+version = "0.0.0"
+description = "This package is for those who need to download a package, with ALL of its dependencies. Not install, download only."
+authors = ["benjkr <69110197+benjkr@users.noreply.github.com>"]
+readme = "README.md"
+license = "MIT"
+packages = [{ include = "all_package_resolver" }]
+
+[tool.poetry.scripts]
+download-package = "all_package_resolver.main:app"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+docker = "^6.1.3"
+typer = "^0.9.0"
+rich = "^13.5.2"
+human-readable = "^1.3.4"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

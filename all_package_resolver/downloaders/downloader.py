@@ -8,7 +8,7 @@ import shutil
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from utils import format_size, format_time
+from all_package_resolver.utils import format_size, format_time
 from time import time
 
 
@@ -79,7 +79,7 @@ class Downloader(ABC):
 
         self.end_time = time()
         panel = Panel(
-            f"* Archive saved as [bold]{output_file_with_ext}[/bold]\n* Total Size: {format_size(getsize(output_file_with_ext))}\n* Elapsed time: {format_time(self.end_time - self.start_time)}",
+            f"* Archive saved as [bold]{output_file_with_ext}[/bold]\n* Total Size: {format_size(getsize(output_file_with_ext))}\n* Total time: {format_time(self.end_time - self.start_time)}",
             title="Summary"
         )
         self.console.print(panel)
