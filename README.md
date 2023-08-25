@@ -45,17 +45,17 @@ $ download-package [OPTIONS] COMMAND [ARGS]...
 ```
 
 ```
-    Commands:
+  Commands:
 
-        os <distro> <package>  Download a package for a specific os distro
-        language <language> <lang-version> <package>  Download a package for a specific language
+    os <distro> <package>  Download a package for a specific os distro
+    language <language> <lang-version> <package>  Download a package for a specific language
 ```
 
 ```bash
-    Examples:
+  Examples:
 
-        $ download-package os ubuntu vim
-        $ download-package --show-logs language python 3.10 boto3
-        $ download-package --output-dir="/some/folder" language python 3.6 boto3
-        $ download-package --help
+    $ download-package os ubuntu vim
+    $ download-package --show-logs language python 3.10 boto3
+    $ download-package --output-dir="/some/folder" language python 3.6 boto3
+    $ download-package --help
 ```
