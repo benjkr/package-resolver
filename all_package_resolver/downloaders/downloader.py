@@ -2,24 +2,25 @@ from abc import ABC, abstractmethod
 import docker
 from datetime import datetime
 from tempfile import mkdtemp
-from os.path import join, getsize, isfile
-from os import listdir
+from os.path import join, getsize
 import shutil
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.progress import Progress
 from all_package_resolver.utils import format_size, format_time
 from time import time
+from pathlib2 import Path
 
 
 class Downloader(ABC):
-    CONTAINER_PACKAGE_DIR = "/mnt/tmp"
+    CONTAINER_PACKAGE_DIR = "/mnt/packages"
 
     def __init__(self, package: str, output_dir: str):
         self.package = package
         self.output_dir = output_dir
         self.console = Console()
-        self.tmp_dir = mkdtemp()
+        self.tmp_dir = Path(mkdtemp())
 
         self.container = None
 
@@ -29,17 +30,17 @@ class Downloader(ABC):
         try:
             self.client = docker.from_env()
         except Exception as e:
-            print("Error: {}".format(e))
-            print("Make sure you have docker installed and running.")
+            self.console.print("Error: {}".format(e))
+            self.console.print("Make sure you have docker installed and running.")
             exit(1)
 
         try:
-            self.console.print(f"Temporary directory: {self.tmp_dir}")
+            # self.console.print(f"Temporary directory: {self.tmp_dir}")
 
-            self.__setup_base_env_image()
+            self.__setup_env_image()
 
             self.container = self.client.containers.run(
-                self.__get_base_image_name(),
+                self.__get_env_image_name(),
                 self.get_download_command(),
                 detach=True,
                 volumes=[rf"{self.tmp_dir}:{self.CONTAINER_PACKAGE_DIR}"],
@@ -52,9 +53,10 @@ class Downloader(ABC):
             self.__print_downloaded_files()
             self.__pack_downloaded_files_and_print_summary()
         except Exception as e:
-            print(f"Unexpected error acurred: {e}")
+            self.console.print_exception()
         finally:
             if self.container is not None:
+                self.container.stop()
                 self.container.remove()
             shutil.rmtree(self.tmp_dir)
 
@@ -77,7 +79,7 @@ class Downloader(ABC):
                 self.container.wait()
             self.console.print("Done!")
 
-    def __setup_base_env_image(self):
+    def __setup_env_image(self):
         """
         Sets up the base environment image for the container. If the image already exists and is not stale (older than 7 days),
         it is used. Otherwise, a new image is created by running the setup environment command in a container and committing
@@ -87,45 +89,41 @@ class Downloader(ABC):
             Exception: If the container fails to start or exit with a non-zero exit code.
         """
         try:
-            base_image = self.client.images.get(self.__get_base_image_name())
+            env_image = self.client.images.get(self.__get_env_image_name())
         except Exception:
-            base_image = None
+            env_image = None
 
         # Determine if the image is stale (older than 7 days). If so, remove it and
-        if base_image is not None:
-            if (datetime.utcnow() - datetime.strptime(base_image.attrs["Created"][0:-11], "%Y-%m-%dT%H:%M:%S")).days < 7:
-                self.console.print(
-                    f"Using cached env image: {self.__get_base_image_name()}")
+        if env_image is not None:
+            now = datetime.utcnow()
+            created_at = datetime.strptime(env_image.attrs["Created"][0:19], "%Y-%m-%dT%H:%M:%S")
+            if (now - created_at).days < 7:
+                self.console.print(f"Using cached env image: {self.__get_env_image_name()}")
                 return
             else:
-                self.console.print(
-                    f"Removing stale env image: {self.__get_base_image_name()}")
-                base_image.remove()
+                self.console.print(f"Removing stale env image: {self.__get_env_image_name()}")
+                env_image.remove()
 
-        # Create a new base image
-        self.console.print(
-            f"Creating base env image: {self.__get_base_image_name()}")
-        c = self.client.containers.run(
-            self.get_image(),
-            self.get_setup_env_command(),
-            detach=True
-        )
+        with self.console.status(f"Pulling {self.get_image()}") as status:
+            self.client.images.pull(self.get_image())
 
-        c.wait()
+            status.update(f"Creating env image with {self.get_image()}")
+            setup_c = self.client.containers.run(self.get_image(), self.get_setup_env_command(), detach=True)
+            setup_c.wait()
 
-        if c.attrs["State"]["ExitCode"] != 0:
-            self.console.print("Error: Could not setup base image")
-            raise Exception("Could not setup base image")
+            if setup_c.attrs["State"]["ExitCode"] != 0:
+                raise Exception("Could not env base image. ")
 
-        c.commit(self.__get_base_image_name(), "latest")
-        c.remove()
+            status.update(f"Committing env image as {self.__get_env_image_name()}")
+            setup_c.commit(self.__get_env_image_name())
+            setup_c.remove()
 
-    def __get_base_image_name(self):
+    def __get_env_image_name(self):
         return f"{self.get_os()}-env"
 
     def __pack_downloaded_files_and_print_summary(self):
         """
-        Packs the downloaded files into a tar archive and prints a summary of the operation. The archive is created in the
+        Packs the downloaded files into a zip archive and prints a summary of the operation. The archive is created in the
         specified directory with a name based on the current timestamp. If the archive creation fails, an exception is
         raised.
 
@@ -133,21 +131,13 @@ class Downloader(ABC):
             Exception: If the archive creation fails.
         """
         now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        output_file = join(
-            self.output_dir, f"{self.get_os()}-{self.package if ' ' not in self.package else 'packages'}-{now_str}")
-        output_file_with_ext = f"{output_file}.zip"
+        output_file = join(self.output_dir, f"{self.get_os()}-{self.package.replace(' ', '_')}-{now_str}.zip")
 
-        shutil.make_archive(
-            output_file,
-            "zip",
-            self.tmp_dir
-        )
+        shutil.make_archive(output_file[:-4], "zip", self.tmp_dir.resolve())
 
         self.end_time = time()
-        panel = Panel(
-            f"* Archive saved as [bold]{output_file_with_ext}[/bold]\n* Total Size: {format_size(getsize(output_file_with_ext))}\n* Total time: {format_time(self.end_time - self.start_time)}",
-            title="Summary"
-        )
+        summary = f"* Archive saved as [bold]{output_file}[/bold]\n* Total Size: {format_size(getsize(output_file))}\n* Total time: {format_time(self.end_time - self.start_time)}"
+        panel = Panel(summary, title="Summary")
         self.console.print(panel)
 
     def __handle_status_code(self):
@@ -166,43 +156,41 @@ class Downloader(ABC):
                 f"{self.container.logs(stdout=False).decode('utf-8')}",
                 title="Error logs",
                 border_style="red",
-                style="red"
+                style="red",
             )
             self.console.print(panel)
-            self.console.print(
-                f"Error: Container exited with code {status_code}")
+            self.console.print(f"Error: Container exited with code {status_code}")
 
-            self.container.remove()
-            exit(1)
+            raise Exception("Container exited with non-zero exit code")
 
     def __print_downloaded_files(self):
         """
         Prints the downloaded files to the console in a table. The files are sorted by size in descending order.
         """
-        table = Table(title="Files downloaded")
-        table.add_column("File")
-        table.add_column("Size")
-
-        list_of_files = filter(lambda x: isfile(join(self.tmp_dir, x)),
-                               listdir(self.tmp_dir))
-        files_with_size = [(file_name, getsize(join(self.tmp_dir, file_name)))
-                           for file_name in list_of_files]
+        files_with_size = [
+            (f, getsize(self.tmp_dir.joinpath(f))) for f in self.tmp_dir.iterdir() if self.tmp_dir.joinpath(f).is_file()
+        ]
         files_with_size.sort(key=lambda x: x[1], reverse=True)
+
+        table = Table(title="Files downloaded", show_header=True, header_style="bold magenta")
+        table.add_column("File", style="cyan")
+        table.add_column("Size", style="magenta")
+
         for file, size in files_with_size:
-            table.add_row(file, format_size(size))
+            file: Path = file
+            table.add_row(file.name, format_size(size))
+
         self.console.print(table)
 
     @abstractmethod
     def get_os(self) -> str:
         pass
 
-    @abstractmethod
-    def get_download_command(self) -> str:
-        pass
+    def get_download_command(self):
+        return f"/bin/sh -c '{self.COMMAND.format(download_dir=self.CONTAINER_PACKAGE_DIR, package=self.package)}'"
 
-    @abstractmethod
-    def get_setup_env_command(self) -> str:
-        pass
+    def get_setup_env_command(self):
+        return f"/bin/sh -c '{self.SETUP_ENV_COMMAND}'"
 
     @abstractmethod
     def get_image(self) -> str:

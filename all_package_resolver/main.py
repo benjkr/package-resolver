@@ -4,8 +4,7 @@ from typing_extensions import Annotated
 from enum import Enum
 from .downloaders.downloader import Downloader
 
-app = typer.Typer(
-    help="Package downloader for different OS and Programming Languages")
+app = typer.Typer(help="Package downloader for different OS and Programming Languages")
 
 
 class OS(str, Enum):
@@ -37,14 +36,17 @@ def os_download(
     match os_type:
         case OS.ubuntu:
             from .downloaders.ubuntu_downloader import UbuntuDownloader
+
             downloader = UbuntuDownloader(package, state["output_dir"])
 
         case OS.centos:
             from .downloaders.centos_downloader import CentosDownloader
+
             downloader = CentosDownloader(package, state["output_dir"])
 
         case OS.alpine:
             from .downloaders.alpine_downloader import AlpineDownloader
+
             downloader = AlpineDownloader(package, state["output_dir"])
 
         case _:
@@ -56,8 +58,7 @@ def os_download(
 @app.command("language")
 def language_download(
     lang_type: Annotated[Lang, "programming language"],
-    lang_version: str = typer.Argument(...,
-                                       help="Programming language version"),
+    lang_version: str = typer.Argument(..., help="Programming language version"),
     package: str = typer.Argument(..., help="Package to download"),
 ):
     downloader: Downloader
@@ -65,6 +66,7 @@ def language_download(
     match lang_type:
         case Lang.python:
             from .downloaders.python_downloader import PythonDownloader
+
             downloader = PythonDownloader(
                 package,
                 state["output_dir"],
@@ -73,11 +75,8 @@ def language_download(
 
         case Lang.node:
             from .downloaders.node_downloader import NodeDownloader
-            downloader = NodeDownloader(
-                package,
-                state["output_dir"],
-                lang_version
-            )
+
+            downloader = NodeDownloader(package, state["output_dir"], lang_version)
 
         case _:
             raise ValueError(f"Unknown language: {lang_type}")
@@ -85,17 +84,27 @@ def language_download(
     downloader.run(show_logs=state["show_logs"])
 
 
-@ app.callback()
+@app.callback()
 def main(
     # verbose: bool = False,
-    output_dir: str = typer.Option(
-        os.path.join(os.path.curdir, "out"),
-        help="Output directory",
-        show_default=True,
-    ),
-    show_logs: bool = typer.Option(
-        False, "--show-logs", help="Show logs", show_default=True
-    ),
+    output_dir: Annotated[
+        str,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Output directory",
+            show_default=True,
+        ),
+    ] = os.path.join(os.path.curdir, "out"),
+    show_logs: Annotated[
+        bool,
+        typer.Option(
+            "--show-logs",
+            "-l",
+            help="Show logs",
+            show_default=True,
+        ),
+    ] = False,
 ):
     # state["verbose"] = verbose
     state["output_dir"] = output_dir

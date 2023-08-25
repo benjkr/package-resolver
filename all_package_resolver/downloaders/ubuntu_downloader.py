@@ -11,11 +11,5 @@ class UbuntuDownloader(Downloader):
     def get_os(self):
         return "ubuntu"
 
-    def get_download_command(self):
-        return f"/bin/bash -c '{self.COMMAND.format(download_dir=self.CONTAINER_PACKAGE_DIR, package=self.package)}'"
-
-    def get_setup_env_command(self):
-        return f"/bin/bash -c '{self.SETUP_ENV_COMMAND}'"
-
     def get_image(self):
         return "ubuntu:latest"

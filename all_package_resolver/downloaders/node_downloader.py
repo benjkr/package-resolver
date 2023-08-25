@@ -12,11 +12,5 @@ class NodeDownloader(Downloader):
     def get_os(self):
         return f"node-{self.node_version}-alpine"
 
-    def get_download_command(self):
-        return f"/bin/sh -c '{self.COMMAND.format(download_dir=self.CONTAINER_PACKAGE_DIR, package=self.package)}'"
-
-    def get_setup_env_command(self) -> str:
-        return f"/bin/sh -c '{self.SETUP_ENV_COMMAND}'"
-    
     def get_image(self):
         return f"node:{self.node_version}-alpine"
