@@ -36,26 +36,26 @@ $ python -m pip install all-package-resolver
 $ download-package [OPTIONS] COMMAND [ARGS]...
 ```
 
-```
-  Options:
+### Options
 
+```
     -l, --show-logs                   Show logs
     -o, --output-dir <output-dir>     Output directory
     -h, --help                        output usage information
 ```
 
-```
-  Commands:
+### Commands
 
+```
     os <distro> <package>  Download a package for a specific os distro
     language <language> <lang-version> <package>  Download a package for a specific language
 ```
 
-```bash
-  Examples:
+### Examples
 
+```bash
     $ download-package os ubuntu vim
     $ download-package --show-logs language python 3.10 boto3
-    $ download-package --output-dir="/some/folder" language python 3.6 boto3
+    $ download-package --output-dir="/dst/folder" language python 3.6 boto3
     $ download-package --help
 ```
