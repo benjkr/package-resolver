@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "all-package-resolver"
-version = "0.0.5"
+version = "0.0.6"
 description = "This package is for those who need to download a package, with ALL of its dependencies. Not install, download only."
 authors = ["benjkr <69110197+benjkr@users.noreply.github.com>"]
 readme = "README.md"
