@@ -27,13 +27,13 @@ If you want to download vim for ubuntu, no matter what os you are running, the p
 ## Installation
 
 ```bash
-$ python -m pip install all-package-resolver
+    $ python -m pip install all-package-resolver
 ```
 
 ## Usage
 
-```
-$ download-package [OPTIONS] COMMAND [ARGS]...
+```bash
+    $ download-package [OPTIONS] COMMAND [ARGS]...
 ```
 
 ### Options
@@ -48,14 +48,17 @@ $ download-package [OPTIONS] COMMAND [ARGS]...
 
 ```
     os <distro> <package>  Download a package for a specific os distro
-    language <language> <lang-version> <package>  Download a package for a specific language
+    lang <language> <lang-version> <package>  Download a package for a specific language
 ```
 
 ### Examples
 
 ```bash
     $ download-package os ubuntu vim
-    $ download-package --show-logs language python 3.10 boto3
-    $ download-package --output-dir="/dst/folder" language python 3.6 boto3
+    $ download-package --show-logs lang python 3.10 boto3
+    $ download-package --output-dir="/dst/folder" lang python 3.6 boto3
+    # For multiple packages
+    $ download-package lang python 3.6 "boto3 requests"
+
     $ download-package --help
 ```

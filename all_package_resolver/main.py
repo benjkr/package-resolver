@@ -2,9 +2,15 @@ import os
 import typer
 from typing_extensions import Annotated
 from enum import Enum
-from .downloaders.downloader import Downloader
+
+from all_package_resolver.downloaders.lang.lang_downloader import LangDownloader
+from all_package_resolver.downloaders.os.os_downloader import OsDownloader
+from .logger import get_logger, INFO, DEBUG
+
+from all_package_resolver.parameters import output_dir_param, verbose_param, no_cleanup_param, package_param
 
 app = typer.Typer(help="Package downloader for different OS and Programming Languages")
+logger = get_logger()
 
 
 class OS(str, Enum):
@@ -18,97 +24,71 @@ class Lang(str, Enum):
     node = "node"
 
 
-state = {
-    "verbose": None,
-    "output_dir": None,
-    "show_logs": None,
-    "package": None,
-}
+state = {"verbose": None, "output_dir": None, "no_cleanup": None}
 
 
 @app.command("os")
-def os_download(
-    os_type: Annotated[OS, "operating system"],
-    package: str = typer.Argument(..., help="Package to download"),
-):
-    downloader: Downloader
+def os_download(os_type: Annotated[OS, "operating system"], package: package_param = None):
+    downloader_class: OsDownloader
 
     match os_type:
         case OS.ubuntu:
-            from .downloaders.ubuntu_downloader import UbuntuDownloader
+            from .downloaders.os.ubuntu_downloader import UbuntuDownloader
 
-            downloader = UbuntuDownloader(package, state["output_dir"])
+            downloader_class = UbuntuDownloader
 
         case OS.centos:
-            from .downloaders.centos_downloader import CentosDownloader
+            from .downloaders.os.centos_downloader import CentosDownloader
 
-            downloader = CentosDownloader(package, state["output_dir"])
+            downloader_class = CentosDownloader
 
         case OS.alpine:
-            from .downloaders.alpine_downloader import AlpineDownloader
+            from .downloaders.os.alpine_downloader import AlpineDownloader
 
-            downloader = AlpineDownloader(package, state["output_dir"])
+            downloader_class = AlpineDownloader
 
         case _:
             raise ValueError(f"Unknown OS: {os_type}")
 
-    downloader.run(show_logs=state["show_logs"])
+    downloader = downloader_class(package, state["output_dir"])
+    downloader.run(not state["no_cleanup"])
 
 
-@app.command("language")
+@app.command("lang")
 def language_download(
     lang_type: Annotated[Lang, "programming language"],
     lang_version: str = typer.Argument(..., help="Programming language version"),
-    package: str = typer.Argument(..., help="Package to download"),
+    package: package_param = None,
 ):
-    downloader: Downloader
+    downloader_class: LangDownloader
 
     match lang_type:
         case Lang.python:
-            from .downloaders.python_downloader import PythonDownloader
+            from .downloaders.lang.python_downloader import PythonDownloader
 
-            downloader = PythonDownloader(
-                package,
-                state["output_dir"],
-                lang_version,
-            )
+            downloader_class = PythonDownloader
 
         case Lang.node:
-            from .downloaders.node_downloader import NodeDownloader
+            from .downloaders.lang.node_downloader import NodeDownloader
 
-            downloader = NodeDownloader(package, state["output_dir"], lang_version)
+            downloader_class = NodeDownloader
 
         case _:
             raise ValueError(f"Unknown language: {lang_type}")
 
-    downloader.run(show_logs=state["show_logs"])
+    downloader = downloader_class(package, state["output_dir"], lang_version)
+    downloader.run(not state["no_cleanup"])
 
 
 @app.callback()
 def main(
-    # verbose: bool = False,
-    output_dir: Annotated[
-        str,
-        typer.Option(
-            "--output-dir",
-            "-o",
-            help="Output directory",
-            show_default=True,
-        ),
-    ] = os.path.join(os.path.curdir, "out"),
-    show_logs: Annotated[
-        bool,
-        typer.Option(
-            "--show-logs",
-            "-l",
-            help="Show logs",
-            show_default=True,
-        ),
-    ] = False,
+    verbose: verbose_param = False,
+    output_dir: output_dir_param = os.path.join(os.path.curdir, "out"),
+    no_cleanup: no_cleanup_param = False,
 ):
-    # state["verbose"] = verbose
+    logger.setLevel(DEBUG if verbose else INFO)
     state["output_dir"] = output_dir
-    state["show_logs"] = show_logs
+    state["no_cleanup"] = no_cleanup
 
 
 if __name__ == "__main__":
