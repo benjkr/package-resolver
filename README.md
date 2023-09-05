@@ -39,8 +39,9 @@ If you want to download vim for ubuntu, no matter what os you are running, the p
 ### Options
 
 ```
-    -l, --show-logs                   Show logs
+    -v, --verbose                     Show logs
     -o, --output-dir <output-dir>     Output directory
+    -c, --no-cleanup                  No cleanup
     -h, --help                        output usage information
 ```
 
@@ -55,7 +56,7 @@ If you want to download vim for ubuntu, no matter what os you are running, the p
 
 ```bash
     $ download-package os ubuntu vim
-    $ download-package --show-logs lang python 3.10 boto3
+    $ download-package -v lang python 3.10 boto3
     $ download-package --output-dir="/dst/folder" lang python 3.6 boto3
     # For multiple packages
     $ download-package lang python 3.6 "boto3 requests"
