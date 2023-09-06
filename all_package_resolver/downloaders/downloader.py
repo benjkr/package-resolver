@@ -5,6 +5,7 @@ from datetime import datetime
 from tempfile import mkdtemp
 from os.path import join, getsize
 import shutil
+import re
 
 from all_package_resolver.logger import get_logger
 from all_package_resolver.utils import format_size, format_time
@@ -47,6 +48,7 @@ class Downloader(ABC):
                 self.get_download_command(),
                 detach=True,
                 volumes=[rf"{self.tmp_dir}:{self.CONTAINER_PACKAGE_DIR}"],
+                environment={"PR_PACKAGE": self.package, "PR_DOWNLOAD_DIR": self.CONTAINER_PACKAGE_DIR},
             )
 
             logger.info(f"Running in container ID: {self.container.id}")
@@ -143,7 +145,8 @@ class Downloader(ABC):
             Exception: If the archive creation fails.
         """
         now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        output_file = join(self.output_dir, f"{self.get_os()}-{self.package.replace(' ', '_')}-{now_str}.zip")
+        merged_packages = re.sub(r"[\s\/]", "-", self.package)
+        output_file = join(self.output_dir, f"{self.get_os()}-{merged_packages}-{now_str}.zip")
 
         shutil.make_archive(output_file[:-4], "zip", self.tmp_dir.resolve())
 
@@ -178,16 +181,17 @@ class Downloader(ABC):
             (f, getsize(self.tmp_dir.joinpath(f))) for f in self.tmp_dir.iterdir() if self.tmp_dir.joinpath(f).is_file()
         ]
         files_with_size.sort(key=lambda x: x[1], reverse=True)
+        max_file_name = max(map(lambda f: len(f[0].name), files_with_size))
 
         for file, size in files_with_size:
-            logger.debug(f"{file.name} {format_size(size)}")
+            logger.debug(f"{file.name.ljust(max_file_name, ' ')} {format_size(size)}")
 
     @abstractmethod
     def get_os(self) -> str:
         pass
 
     def get_download_command(self):
-        return f"/bin/sh -c '{self.COMMAND.format(download_dir=self.CONTAINER_PACKAGE_DIR, package=self.package)}'"
+        return f"/bin/sh -c '{self.COMMAND}'"
 
     def get_setup_env_command(self):
         return f"/bin/sh -c '{self.SETUP_ENV_COMMAND}'"
