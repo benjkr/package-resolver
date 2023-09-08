@@ -1,30 +1,21 @@
 import os
+import tempfile
+from datetime import datetime
+from logging import DEBUG, INFO
+
 import typer
+from pathlib2 import Path
 from typing_extensions import Annotated
-from enum import Enum
 
-from all_package_resolver.downloaders.lang.lang_downloader import LangDownloader
-from all_package_resolver.downloaders.os.os_downloader import OsDownloader
-from .logger import get_logger, INFO, DEBUG
+from all_package_resolver.downloaders.lang.lang_downloader import Lang, LangDownloader
+from all_package_resolver.downloaders.os.os_downloader import OS, OsDownloader
+from all_package_resolver.logger import get_logger
+from all_package_resolver.parameters import no_cleanup_param, output_dir_param, package_param, verbose_param
+from all_package_resolver.state import state
 
-from all_package_resolver.parameters import output_dir_param, verbose_param, no_cleanup_param, package_param
+FILE_LOG_PREFIX = "package-resolver-logs-{date}.log"
 
 app = typer.Typer(help="Package downloader for different OS and Programming Languages")
-logger = get_logger()
-
-
-class OS(str, Enum):
-    ubuntu = "ubuntu"
-    centos = "centos"
-    alpine = "alpine"
-
-
-class Lang(str, Enum):
-    python = "python"
-    node = "node"
-
-
-state = {"verbose": None, "output_dir": None, "no_cleanup": None}
 
 
 @app.command("os")
@@ -50,7 +41,7 @@ def os_download(os_type: Annotated[OS, "operating system"], package: package_par
         case _:
             raise ValueError(f"Unknown OS: {os_type}")
 
-    downloader = downloader_class(package, state["output_dir"])
+    downloader = downloader_class(state["logger"], package, state["output_dir"])
     downloader.run(not state["no_cleanup"])
 
 
@@ -76,7 +67,7 @@ def language_download(
         case _:
             raise ValueError(f"Unknown language: {lang_type}")
 
-    downloader = downloader_class(package, state["output_dir"], lang_version)
+    downloader = downloader_class(state["logger"], package, state["output_dir"], lang_version)
     downloader.run(not state["no_cleanup"])
 
 
@@ -86,7 +77,11 @@ def main(
     output_dir: output_dir_param = os.path.join(os.path.curdir, "out"),
     no_cleanup: no_cleanup_param = False,
 ):
+    log_path = Path(tempfile.gettempdir(), FILE_LOG_PREFIX.format(date=datetime.now().isoformat().replace(":", "_")))
+    logger = get_logger(log_path)
     logger.setLevel(DEBUG if verbose else INFO)
+    state["log_path"] = log_path
+    state["logger"] = logger
     state["output_dir"] = output_dir
     state["no_cleanup"] = no_cleanup
 

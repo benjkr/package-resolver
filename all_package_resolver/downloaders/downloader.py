@@ -1,18 +1,18 @@
-from abc import ABC, abstractmethod
-from typing import List, Tuple
-import docker
-from datetime import datetime
-from tempfile import mkdtemp
-from os.path import join, getsize
-import shutil
 import re
-
-from all_package_resolver.logger import get_logger
-from all_package_resolver.utils import format_size, format_time
+import shutil
+from abc import ABC, abstractmethod
+from datetime import datetime
+from logging import Logger
+from os.path import getsize, join
+from tempfile import mkdtemp
 from time import time
+from typing import List, Tuple
+
+import docker
 from pathlib2 import Path
 
-logger = get_logger()
+from all_package_resolver.state import state
+from all_package_resolver.utils import format_size, format_time
 
 
 class Downloader(ABC):
@@ -22,7 +22,8 @@ class Downloader(ABC):
 
     CONTAINER_PACKAGE_DIR = "/mnt/packages"
 
-    def __init__(self, package: str, output_dir: str):
+    def __init__(self, logger: Logger, package: str, output_dir: str):
+        self.logger = logger
         self.package = package
         self.output_dir = output_dir
         self.tmp_dir = Path(mkdtemp())
@@ -35,11 +36,11 @@ class Downloader(ABC):
         try:
             self.client = docker.from_env()
         except Exception as e:
-            logger.error(f"Make sure you have docker installed and running. {e}")
+            self.logger.error(f"Make sure you have docker installed and running. {e}")
             exit(1)
 
         try:
-            logger.debug(f"Temporary directory: {self.tmp_dir}")
+            self.logger.debug(f"Temporary directory: {self.tmp_dir}")
 
             self.__setup_env_image()
 
@@ -51,46 +52,47 @@ class Downloader(ABC):
                 environment={"PR_PACKAGE": self.package, "PR_DOWNLOAD_DIR": self.CONTAINER_PACKAGE_DIR},
             )
 
-            logger.info(f"Running in container ID: {self.container.id}")
+            self.logger.info(f"Running in container ID: {self.container.id}")
             self.__handle_show_logs()
 
             self.__handle_status_code()
             self.__print_downloaded_files()
             self.__pack_downloaded_files_and_print_summary()
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
         finally:
             if cleanup:
                 self.__cleanup()
             else:
-                logger.info("Skipping cleanup.")
+                self.logger.info("Skipping cleanup.")
+            self.logger.info(f"All logs are saved in '{state['log_path']}'")
 
     def __cleanup(self):
-        logger.debug("Starting cleanup...")
+        self.logger.debug("Starting cleanup...")
 
         if self.container is not None:
-            logger.debug("Stopping container")
+            self.logger.debug("Stopping container")
             self.container.stop()
 
-            logger.debug("Removing container")
+            self.logger.debug("Removing container")
             self.container.remove()
 
-        logger.debug("Removing temp folder")
+        self.logger.debug("Removing temp folder")
         shutil.rmtree(self.tmp_dir)
 
-        logger.debug("Finished cleanup.")
+        self.logger.debug("Finished cleanup.")
 
     def __handle_show_logs(self):
         """
         Print container logs in debug.
         """
-        logger.info("Waiting for container to finish...")
+        self.logger.info("Waiting for container to finish...")
 
-        logger.debug("Streaming container logs...")
+        self.logger.debug("Streaming container logs...")
         for log in self.container.logs(stream=True):
             log_str = log.decode("utf-8").strip()
-            logger.debug(log_str)
-        logger.debug("End of container logs.")
+            self.logger.debug(log_str)
+        self.logger.debug("End of container logs.")
         self.container.wait()
 
     def __setup_env_image(self):
@@ -112,22 +114,22 @@ class Downloader(ABC):
             now = datetime.utcnow()
             created_at = datetime.strptime(env_image.attrs["Created"][0:19], "%Y-%m-%dT%H:%M:%S")
             if (now - created_at).days < 7:
-                logger.info(f"Using cached env image: {self.__env_image_name}")
+                self.logger.info(f"Using cached env image: {self.__env_image_name}")
                 return
             else:
-                logger.info(f"Removing stale env image: {self.__env_image_name}")
+                self.logger.info(f"Removing stale env image: {self.__env_image_name}")
                 env_image.remove()
 
         self.client.images.pull(self.get_image())
 
-        logger.info(f"Creating env image with {self.get_image()}")
+        self.logger.info(f"Creating env image with {self.get_image()}")
         setup_c = self.client.containers.run(self.get_image(), self.get_setup_env_command(), detach=True)
         setup_c.wait()
 
         if setup_c.attrs["State"]["ExitCode"] != 0:
-            raise Exception("Could not env base image. ")
+            raise Exception("Could not create env base image.")
 
-        logger.info(f"Committing env image as {self.__env_image_name}")
+        self.logger.info(f"Committing env image as {self.__env_image_name}")
         setup_c.commit(self.__env_image_name)
         setup_c.remove()
 
@@ -151,8 +153,9 @@ class Downloader(ABC):
         shutil.make_archive(output_file[:-4], "zip", self.tmp_dir.resolve())
 
         self.end_time = time()
-        summary = f"* Archive saved as {output_file}\n* Total Size: {format_size(getsize(output_file))}\n* Total time: {format_time(self.end_time - self.start_time)}"
-        logger.info(summary)
+        self.logger.info(f"Archive saved as '{output_file}'")
+        self.logger.info(f"Total Size: {format_size(getsize(output_file))}")
+        self.logger.info(f"Total time: {format_time(self.end_time - self.start_time)}")
 
     def __handle_status_code(self):
         """
@@ -167,11 +170,11 @@ class Downloader(ABC):
 
         if status_code != 0:
             err_logs = self.container.logs(stdout=False).decode("utf-8")
-            logger.error(f"Container exited with code {status_code}")
-            logger.error(err_logs)
+            self.logger.error(f"Container exited with code {status_code}")
+            self.logger.error(err_logs)
 
             raise Exception("Container exited with non-zero exit code")
-        logger.info(f"Container finished running.")
+        self.logger.info(f"Container finished running.")
 
     def __print_downloaded_files(self):
         """
@@ -184,7 +187,7 @@ class Downloader(ABC):
         max_file_name = max(map(lambda f: len(f[0].name), files_with_size))
 
         for file, size in files_with_size:
-            logger.debug(f"{file.name.ljust(max_file_name, ' ')} {format_size(size)}")
+            self.logger.debug(f"{file.name.ljust(max_file_name, ' ')} {format_size(size)}")
 
     @abstractmethod
     def get_os(self) -> str:
