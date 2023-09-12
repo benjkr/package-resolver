@@ -22,22 +22,20 @@ jobs:
   publish:
     needs: tests
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (contains(github.ref, '/refs/tags'))
     steps:
       - uses: actions/checkout@v2
       - name: Check if Git tag exists
         run: echo "::set-env name=HEAD_TAG::$(git tag --points-at HEAD)"
       - uses: actions/setup-python@v4
-        if: env.HEAD_TAG != ''
         with:
           python-version: "3.10"
           architecture: "x64"
 
       - name: Install poetry
-        if: env.HEAD_TAG != ''
         run: pip install poetry
 
       - name: Publish to PyPI
-        if: env.HEAD_TAG != ''
         run: poetry publish --build
         env:
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.POETRY_PYPI_TOKEN }}
