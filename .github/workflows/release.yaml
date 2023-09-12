@@ -1,8 +1,7 @@
 # Only run on new tags
 on:
   push:
-    tags:
-      - "*"
+    branches: "*"
 
 jobs:
   tests:
