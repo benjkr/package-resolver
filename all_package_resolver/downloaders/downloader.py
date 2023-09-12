@@ -20,14 +20,14 @@ class Downloader(ABC):
     This class is abstractive. Do not use it without inheritance. The child class MUST consist SETUP_ENV_COMMAND and COMMAND class properties.
     """
 
+    # The folder inside the container to store the downloaded files.
     CONTAINER_PACKAGE_DIR = "/mnt/packages"
 
     def __init__(self, logger: Logger, package: str, output_dir: str):
         self.logger = logger
         self.package = package
         self.output_dir = output_dir
-        self.tmp_dir = Path(mkdtemp())
-
+        self.tmp_dir = None
         self.container = None
 
     def run(self, cleanup: bool = True):
@@ -40,6 +40,7 @@ class Downloader(ABC):
             exit(1)
 
         try:
+            self.tmp_dir = Path(mkdtemp())
             self.logger.debug(f"Temporary directory: {self.tmp_dir}")
 
             self.__setup_env_image()
@@ -109,7 +110,7 @@ class Downloader(ABC):
         except Exception:
             env_image = None
 
-        # Determine if the image is stale (older than 7 days). If so, remove it and
+        # Determine if the image is stale (older than 7 days). If so, remove it.
         if env_image is not None:
             now = datetime.utcnow()
             created_at = datetime.strptime(env_image.attrs["Created"][0:19], "%Y-%m-%dT%H:%M:%S")
@@ -188,6 +189,18 @@ class Downloader(ABC):
 
         for file, size in files_with_size:
             self.logger.debug(f"{file.name.ljust(max_file_name, ' ')} {format_size(size)}")
+
+    @property
+    @abstractmethod
+    def SETUP_ENV_COMMAND(self) -> str:
+        """Bash command to setup the image for cache usage."""
+        pass
+
+    @property
+    @abstractmethod
+    def COMMAND(self) -> str:
+        """Bash command to download the package and dependencies."""
+        pass
 
     @abstractmethod
     def get_os(self) -> str:
